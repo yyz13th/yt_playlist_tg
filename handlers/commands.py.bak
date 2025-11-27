@@ -1,0 +1,70 @@
+from aiogram import Router
+from aiogram.filters import CommandStart
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+import handlers.function as hf
+import url_storage as storage
+import keyboards.inline_kb as in_kb
+router = Router()
+
+# Temporary store for last URL per chat
+last_url_per_chat = {}
+
+@router.message(CommandStart())
+async def cmd_start(message: Message):
+    await message.reply(
+        "Привет. Видос можно скачать тут. Ботом. Я его дам. Боту нужна ссылка. Ссылку я не дам."
+    )
+
+# Unified handler for both URL and /video or /audio
+@router.message(lambda message: True)  # accept any text
+async def handle_video(message: Message):
+    text = message.text.strip()
+    chat_id = message.chat.id
+
+    # --- If message contains a link ---
+    if any(x in text for x in ["twitter.com", "x.com", "instagram.com", "tiktok.com", "youtube.com", "youtu.be"]):
+        url = text
+        url_id = hf.generate_url_id(url)
+        storage.url_storage[url_id] = url
+        storage.save_url_storage(storage.url_storage)
+        storage.url_storage = storage.load_url_storage()
+
+        # store last url per chat
+        last_url_per_chat[chat_id] = url_id
+
+        # send original buttons
+
+      #  await message.answer(
+      #      "Выбери формат загрузки:",
+      #      reply_markup=await in_kb.format_btn(url_id)
+      #  )
+
+        await message.answer(
+            "Выбери формат загрузки:",
+            reply_markup=in_kb.reply_btn
+        )
+        return
+        await message.delete()
+
+    # --- If message is /video or /audio ---
+    if text in ["/video", "/audio"]:
+        url_id = last_url_per_chat.get(chat_id)
+        if not url_id:
+            return await message.answer("Сначала отправь ссылку!")
+
+        if text == "/video":
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Скачать Видяшку", callback_data=f"video|{url_id}")]
+            ])
+        else:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Скачать Песенку", callback_data=f"audio|{url_id}")]
+            ])
+        load_msg = await message.answer("   НАЖМИ ЧТОБЫ СКАЧАТЬ  ", reply_markup=kb)
+        #await load_msg.delete
+        #await load_msg.edit_reply_markup(reply_markup=None)
+        #await load_msg.delete()
+        return
+
+    # --- Any other text ---
+    await message.answer("Отправь ссылку на видео или /video / /audio после ссылки.")

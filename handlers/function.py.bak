@@ -1,0 +1,105 @@
+import os
+import hashlib
+import yt_dlp
+import time
+from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+
+# hash links for download and return
+def generate_url_id(url: str):
+    return hashlib.md5(url.encode()).hexdigest()
+    
+# download and send media
+async def download_and_send_media(bot, chat_id, url, media_type, cleanup_msgs=None):
+    ydl_opts = {
+        'format': 'best[height<=480][ext=mp4]/best[ext=mp4]' if media_type == 'video' else 'bestaudio[ext=m4a]/best',
+        'outtmpl': f"downloads/%(title)s.{'mp4' if media_type == 'video' else 'mp3'}",
+    }
+
+    try:
+        start_time = time.time()
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            direct_link_info = ydl.extract_info(url, download=False)
+            clean_name = os.path.splitext(os.path.basename(filename))[0]
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
+        file_size_mb = os.path.getsize(filename) / (1024 * 1024)
+        print(f"File downloaded: {filename} ({file_size_mb:.2f} MB)")
+        
+        # Get direct media URL (may be temporary!)
+        #direct_url = direct_link_info.get('url', url)
+
+
+        # Get direct media URL (avoid HLS streams)
+        direct_url = url  # Start with original URL
+
+        if 'formats' in direct_link_info:
+            # Prefer progressive formats that are not HLS
+            for fmt in direct_link_info['formats']:
+                fmt_url = fmt.get('url', '')
+                if (fmt_url and 
+                    'm3u8' not in fmt_url and 
+                    'hls' not in fmt_url and
+                    fmt.get('vcodec') != 'none' and 
+                    fmt.get('acodec') != 'none'):
+                    direct_url = fmt_url
+                    break
+        else:
+            # Fallback: any non-HLS format
+            for fmt in direct_link_info['formats']:
+                fmt_url = fmt.get('url', '')
+                if fmt_url and 'm3u8' not in fmt_url and 'hls' not in fmt_url:
+                    direct_url = fmt_url
+                    break
+
+        # Create inline keyboard with download link
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔗 Скачать напрямую", url=direct_url)]
+            ]
+        )
+
+        # 🚫 Check file size limit (Telegram limit is ~50 MB for bots)
+        if file_size_mb > 49.9:
+            await bot.send_message(
+                chat_id,
+                f"⚠️ {filename}  слишком большой для отправки в Telegram (> {file_size_mb:.2f} MB).\n"
+                f"Ты можешь скачать его напрямую по кнопке ниже 👇",
+                reply_markup=keyboard
+            )
+           # os.remove(filename)
+
+            # Delete earlier messages if provided
+            if cleanup_msgs:
+                for msg in cleanup_msgs:
+                    try:
+                        await bot.delete_message(chat_id, msg.message_id)
+                    except Exception as e:
+                        print(f"Failed to delete message {msg.message_id}: {e}")
+            return
+        
+        media_file = FSInputFile(filename)
+        caption = f"👌Ну все! Держи {'видяшку' if media_type == 'video' else 'песенку'}.\n ✨{clean_name}✨\n"
+
+        if media_type == "video":
+            await bot.send_video(chat_id, media_file, caption=caption, reply_markup=keyboard)
+        else:
+            await bot.send_audio(chat_id, media_file, caption=caption, reply_markup=keyboard)
+        
+       # os.remove(filename)
+
+        # Delete earlier messages if provided
+        if cleanup_msgs:
+            for msg in cleanup_msgs:
+                try:
+                    await bot.delete_message(chat_id, msg.message_id)
+                except Exception as e:
+                    print(f"Failed to delete message {msg.message_id}: {e}")
+    
+    except Exception as e:
+        await bot.send_message(chat_id, f"Error: {e}")
+
