@@ -17,6 +17,7 @@ start_kb = ReplyKeyboardMarkup(
 playlist_loaded_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🎵 Download Songs")],
+        [KeyboardButton(text="🎵 Download All")],
         [KeyboardButton(text="📄 Generate XML")],
         [KeyboardButton(text="📤 Upload XML")]
     ],
@@ -26,6 +27,7 @@ playlist_loaded_kb = ReplyKeyboardMarkup(
 xml_uploaded_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🎵 Download Edited")],
+        [KeyboardButton(text="📥 Download New Only")], 
         [KeyboardButton(text="📤 Upload XML")]
     ],
     resize_keyboard=True
@@ -55,3 +57,13 @@ async def handle_generate_xml_button(message):
 @router.message(F.text == "🎵 Download Edited")
 async def handle_download_edited_button(message):
     await cmd_download_edited(message)
+
+@router.message(F.text == "🎵 Download All")
+async def handle_download_all_button(message):
+    from handlers.handler_playlists import cmd_download_all
+    await cmd_download_all(message)
+
+@router.message(F.text == "📥 Download New Only")
+async def handle_download_new_only_button(message):
+    from handlers.handler_xmls import cmd_download_new_only
+    await cmd_download_new_only(message)
