@@ -58,11 +58,15 @@ async def cmd_download_songs(message: Message):
 
     await message.answer(f"📥 Downloading {len(playlist_data['tracks'])} tracks...")
     success_count = 0
-    
+    progress_msg = await message.answer("🔄 Progress: 0% (0/0)")
+
     for i, track in enumerate(playlist_data['tracks'], 1):
         try:
             track_name = track.get('custom_title') or track['original_title']
-            await message.answer(f"🎵 {i}/{len(playlist_data['tracks'])}: Downloading {track_name}...")
+        
+            # Update progress
+            progress = int((i / len(playlist_data['tracks'])) * 100)
+            await progress_msg.edit_text(f"🔄 Progress: {progress}% ({i}/{len(playlist_data['tracks'])})\nCurrent: {track_name}")
 
             from handlers.function import download_playlist_audio
             file_path = await download_playlist_audio(message.bot, message.chat.id, track)
@@ -81,10 +85,13 @@ async def cmd_download_songs(message: Message):
         except Exception as e:
             await message.answer(f"❌ Failed to download: {track['original_title']}")
 
+# Delete the progress message when done
+    await progress_msg.delete()
+
     await message.answer(
-        f"✅ Download completed: {success_count}/{len(playlist_data['tracks'])} tracks", 
+        f"✅ Download completed: {success_count}/{len(playlist_data['tracks'])} tracks",
         reply_markup=start_kb
-    )
+)
 
 @router.message(Command("generate_xml"))
 async def cmd_generate_xml(message: Message):
